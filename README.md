@@ -1,6 +1,7 @@
 # Four in a Row
 
 A browser-based Connect Four game with a responsive interface, three AI difficulty levels, and local two-player mode. The game is built with plain HTML, CSS, and JavaScript; it has no build step or external runtime dependencies.
+AI searches run in a Web Worker. The analysis panel reports real engine statistics for each AI move and provides move-by-move review and replay.
 
 ## Run locally
 
@@ -21,13 +22,25 @@ Then open [http://localhost:8000](http://localhost:8000).
 - Choose Easy, Medium, or Hard to set the AI search depth to 2, 4, or 6, respectively.
 
 The selected game mode and difficulty are saved in browser local storage.
+The AI searches progressively up to the selected difficulty's depth and reuses
+evaluated positions during each search.
+
+## Run tests
+
+With Node.js installed, run the focused AI tests:
+
+```powershell
+node --test tests\connect-four-engine.test.js
+```
 
 ## Project files
 
 | File | Purpose |
 | --- | --- |
 | `index.html` | Game page, board layout, styles, and help content |
-| `game.js` | Board state, rules, move handling, win/draw detection, and AI |
+| `game.js` | Board state, game modes, move handling, and UI integration |
+| `connect-four-engine.js` | Connect Four rules, tactical evaluation, and minimax/alpha-beta AI |
+| `connect-four-worker.js` | Runs AI searches off the UI thread and returns move, score, depth, and statistics |
 | `presentation.js` | Presentation-only status updates, player indicators, board hover feedback, and win confetti |
 | `gamekit.js` | Shared helpers, including difficulty controls and local-storage utilities |
 | `manpage.js` | How-to-play dialog behavior |
