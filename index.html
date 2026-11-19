@@ -745,7 +745,7 @@
     <ul>
       <li><strong>Easy</strong> — AI searches depth 2.</li>
       <li><strong>Medium</strong> — depth 4.</li>
-      <li><strong>Hard</strong> — depth 6, using alpha-beta pruning and center-weighted evaluation.</li>
+      <li><strong>Hard</strong> — depth 6, using iterative alpha-beta search, cached positions, and tactical evaluation.</li>
     </ul>
     <h2>Strategy</h2>
     <p class="muted">Control the center column first — a checker there belongs to more winning lines. Watch out for the opponent's next move.</p>
@@ -753,6 +753,7 @@
 
   <script defer src="./manpage.js"></script>
   <script defer src="./gamekit.js"></script>
+  <script defer src="./connect-four-engine.js"></script>
   <script defer src="./game.js"></script>
   <script defer src="./presentation.js"></script>
 </body>
