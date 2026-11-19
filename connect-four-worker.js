@@ -9,13 +9,16 @@ self.onmessage = (event) => {
       throw new Error("Invalid search request");
     }
     const grid = board.map((row) => Uint8Array.from(row));
+    const startedAt = performance.now();
     const result = self.ConnectFourEngine.chooseMove(grid, player, depth);
+    const searchMs = performance.now() - startedAt;
     self.postMessage({
       id,
       move: result.col,
       score: result.score,
       depth: result.depth,
       stats: result.stats,
+      searchMs,
     });
   } catch (error) {
     self.postMessage({ id, error: error && error.message ? error.message : String(error) });

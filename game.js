@@ -12,6 +12,19 @@
   const resetBtn = document.getElementById("reset-btn");
   const chipsEl  = document.getElementById("chips");
   const modeSel  = document.getElementById("mode");
+  const analysisEls = {
+    depth: document.getElementById("analysis-depth"),
+    nodes: document.getElementById("analysis-nodes"),
+    cutoffs: document.getElementById("analysis-cutoffs"),
+    hits: document.getElementById("analysis-hits"),
+    time: document.getElementById("analysis-time"),
+    score: document.getElementById("analysis-score"),
+    move: document.getElementById("analysis-move"),
+    history: document.getElementById("move-history"),
+    back: document.getElementById("history-back"),
+    forward: document.getElementById("history-forward"),
+    replay: document.getElementById("history-replay"),
+  };
 
   const DEPTHS = { easy: 2, medium: 4, hard: 6 };
   const store = Gamekit.storage("connect-four:");
@@ -26,9 +39,10 @@
   let history = [];           // stack of {col, row, player}
   let current = P1;
   let gameOver = false;
-  let winLine = null;         // [{r,c},...]
   let thinking = false;
   let humanIs = P1;           // set per mode
+  let viewPly = 0;
+  let replayTimer = null;
 
   function newGrid() {
     return Engine.createGrid();
@@ -59,36 +73,120 @@
   }
 
   function renderBoard() {
+    const shownGrid = gridAtPly(viewPly);
+    const shownWin = winAtPly(viewPly, shownGrid);
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const i = r * COLS + c;
         const el = boardEl.children[i];
         el.classList.remove("p1", "p2", "win");
-        if (grid[r][c] === P1) el.classList.add("p1");
-        else if (grid[r][c] === P2) el.classList.add("p2");
+        if (shownGrid[r][c] === P1) el.classList.add("p1");
+        else if (shownGrid[r][c] === P2) el.classList.add("p2");
       }
     }
-    if (winLine) {
-      winLine.forEach(({ r, c }) => {
+    if (shownWin) {
+      shownWin.forEach(({ r, c }) => {
         boardEl.children[r * COLS + c].classList.add("win");
       });
     }
     // Disable full columns
     for (let c = 0; c < COLS; c++) {
       const btn = colsEl.children[c];
-      btn.disabled = gameOver || thinking || grid[0][c] !== EMPTY;
+      btn.disabled = gameOver || thinking || viewPly !== history.length || shownGrid[0][c] !== EMPTY;
     }
+  }
+
+  function gridAtPly(ply) {
+    if (ply >= history.length) return grid;
+    const snapshot = newGrid();
+    for (let i = 0; i < ply; i++) {
+      const move = history[i];
+      snapshot[move.r][move.c] = move.p;
+    }
+    return snapshot;
+  }
+
+  function winAtPly(ply, shownGrid) {
+    if (ply <= 0) return null;
+    const move = history[ply - 1];
+    return Engine.winAt(shownGrid, move.r, move.c, move.p);
+  }
+
+  function renderAnalysis() {
+    const formatter = new Intl.NumberFormat();
+    analysisEls.history.innerHTML = "";
+    history.forEach((move, index) => {
+      const button = document.createElement("button");
+      const localName = move.p === P1 ? "Amber" : "Mint";
+      const isAI = mode !== "local" && move.p !== humanIs;
+      button.type = "button";
+      button.className = "history-move";
+      button.setAttribute("aria-current", viewPly === index + 1 ? "step" : "false");
+      const label = mode === "local" ? localName : (isAI ? "AI" : "You");
+      const notation = index % 2 === 0 ? "." : "…";
+      button.textContent = `${Math.floor(index / 2) + 1}${notation} ${label} · column ${move.c + 1}`;
+      if (move.analysis) {
+        const note = document.createElement("small");
+        note.textContent = `score ${formatter.format(move.analysis.score)}`;
+        button.appendChild(note);
+      }
+      button.addEventListener("click", () => showHistoryPly(index + 1));
+      analysisEls.history.appendChild(button);
+    });
+
+    let latestAI = null;
+    for (let i = 0; i < viewPly; i++) if (history[i].analysis) latestAI = history[i];
+    const values = latestAI && latestAI.analysis;
+    analysisEls.depth.textContent = values ? String(values.depth) : "—";
+    analysisEls.nodes.textContent = values ? formatter.format(values.stats.nodes) : "—";
+    analysisEls.cutoffs.textContent = values ? formatter.format(values.stats.prunedBranches) : "—";
+    analysisEls.hits.textContent = values ? formatter.format(values.stats.tableHits) : "—";
+    analysisEls.time.textContent = values ? `${values.searchMs.toFixed(2)} ms` : "—";
+    analysisEls.score.textContent = values ? formatter.format(values.score) : "—";
+    if (values) {
+      const col = latestAI.c + 1;
+      analysisEls.move.innerHTML = `<p><strong>AI selected column ${col}</strong></p><p>Evaluation score: <strong>${formatter.format(values.score)}</strong></p><p>Depth ${values.depth} · ${formatter.format(values.stats.nodes)} nodes · ${values.searchMs.toFixed(2)} ms</p>`;
+    } else {
+      analysisEls.move.innerHTML = "<p>No AI move has been analyzed at this position.</p>";
+    }
+    analysisEls.back.disabled = viewPly <= 0;
+    analysisEls.forward.disabled = viewPly >= history.length;
+    analysisEls.replay.disabled = !gameOver || history.length === 0 || replayTimer !== null;
+  }
+
+  function showHistoryPly(ply) {
+    if (replayTimer !== null) { clearInterval(replayTimer); replayTimer = null; }
+    viewPly = Math.max(0, Math.min(history.length, ply));
+    renderBoard();
+    renderAnalysis();
+  }
+
+  function replayGame() {
+    if (!gameOver || history.length === 0 || thinking) return;
+    showHistoryPly(0);
+    replayTimer = setInterval(() => {
+      viewPly++;
+      renderBoard();
+      renderAnalysis();
+      if (viewPly >= history.length) {
+        clearInterval(replayTimer);
+        replayTimer = null;
+        renderAnalysis();
+      }
+    }, 650);
+    renderAnalysis();
   }
 
   function dropRow(g, c) {
     return Engine.dropRow(g, c);
   }
 
-  function makeMove(c, p) {
+  function makeMove(c, p, analysis = null) {
     const r = dropRow(grid, c);
     if (r < 0) return false;
     grid[r][c] = p;
-    history.push({ r, c, p });
+    history.push({ r, c, p, analysis });
+    viewPly = history.length;
     return true;
   }
 
@@ -105,14 +203,13 @@
     advance();
   }
 
-  function playMove(c) {
+  function playMove(c, analysis = null) {
     if (dropRow(grid, c) < 0) return false;
-    const ok = makeMove(c, current);
+    const ok = makeMove(c, current, analysis);
     if (!ok) return false;
     const last = history[history.length - 1];
     const win = Engine.winAt(grid, last.r, last.c, last.p);
     if (win) {
-      winLine = win;
       gameOver = true;
       const who = (mode === "local")
         ? (last.p === P1 ? "Amber" : "Mint") + " wins."
@@ -126,6 +223,7 @@
       updateTurnStatus();
     }
     renderBoard();
+    renderAnalysis();
     return true;
   }
 
@@ -188,7 +286,12 @@
             if (col >= 0 && !gameOver && mode !== "local" && current === player && current !== humanIs) {
               // Keep the completed search details available for diagnostics without changing the UI.
               console.debug("Connect Four AI search", { score: result.score, depth: result.depth, stats: result.stats });
-              playMove(col);
+              playMove(col, {
+                score: result.score,
+                depth: result.depth,
+                stats: result.stats,
+                searchMs: result.searchMs,
+              });
             }
           };
           aiWorker.onerror = (event) => {
@@ -213,13 +316,15 @@
 
   function reset() {
     cancelAI();
+    if (replayTimer !== null) { clearInterval(replayTimer); replayTimer = null; }
     grid = newGrid();
     history = [];
     current = P1;
     gameOver = false;
-    winLine = null;
+    viewPly = 0;
     renderShell();
     renderBoard();
+    renderAnalysis();
     updateTurnStatus();
     if (mode !== "local" && current !== humanIs) advance();
   }
@@ -234,14 +339,18 @@
       if (last.p === humanIs) undoMove();
     }
     gameOver = false;
-    winLine = null;
     // Recompute whose turn it is based on history
     current = history.length % 2 === 0 ? P1 : P2;
+    viewPly = history.length;
     renderBoard();
+    renderAnalysis();
     updateTurnStatus();
   });
 
   resetBtn.addEventListener("click", () => reset());
+  analysisEls.back.addEventListener("click", () => showHistoryPly(viewPly - 1));
+  analysisEls.forward.addEventListener("click", () => showHistoryPly(viewPly + 1));
+  analysisEls.replay.addEventListener("click", replayGame);
 
   modeSel.addEventListener("change", () => {
     mode = modeSel.value;

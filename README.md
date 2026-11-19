@@ -1,6 +1,7 @@
 # Four in a Row
 
 A browser-based Connect Four game with a responsive interface, three AI difficulty levels, and local two-player mode. The game is built with plain HTML, CSS, and JavaScript; it has no build step or external runtime dependencies.
+AI searches run in a Web Worker. The analysis panel reports real engine statistics for each AI move and provides move-by-move review and replay.
 
 ## Run locally
 
