@@ -39,6 +39,7 @@ node --test tests\connect-four-engine.test.js
 | `index.html` | Game page, board layout, styles, and help content |
 | `game.js` | Board state, game modes, move handling, and UI integration |
 | `connect-four-engine.js` | Connect Four rules, tactical evaluation, and minimax/alpha-beta AI |
+| `connect-four-worker.js` | Runs AI searches off the UI thread and returns move, score, depth, and statistics |
 | `presentation.js` | Presentation-only status updates, player indicators, board hover feedback, and win confetti |
 | `gamekit.js` | Shared helpers, including difficulty controls and local-storage utilities |
 | `manpage.js` | How-to-play dialog behavior |

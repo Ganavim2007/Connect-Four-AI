@@ -99,16 +99,6 @@
     return true;
   }
 
-  function pickAIMove(me) {
-    const depth = DEPTHS[diff];
-    const res = Engine.chooseMove(grid, me, depth);
-    let col = res.col;
-    if (col < 0 || dropRow(grid, col) < 0) {
-      for (let c = 0; c < COLS; c++) if (dropRow(grid, c) >= 0) { col = c; break; }
-    }
-    return col;
-  }
-
   function onColClick(c) {
     if (gameOver || thinking || mode !== "local" && current !== humanIs) return;
     if (!playMove(c)) return;
@@ -151,7 +141,22 @@
   }
 
   let aiTimer = null;
-  function cancelAI() { if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; } thinking = false; }
+  let aiWorker = null;
+  let searchId = 0;
+  function cancelAI() {
+    searchId++;
+    if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+    if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+    thinking = false;
+  }
+
+  function finishSearch(id) {
+    if (id !== searchId) return false;
+    if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+    thinking = false;
+    renderBoard();
+    return true;
+  }
 
   function advance() {
     if (gameOver) return;
@@ -163,9 +168,38 @@
         if (aiTimer !== gen) return;
         aiTimer = null;
         if (gameOver || mode === "local" || current === humanIs) { thinking = false; renderBoard(); return; }
-        const col = pickAIMove(current);
-        thinking = false;
-        if (col >= 0) playMove(col);
+        const id = ++searchId;
+        const player = current;
+        const board = grid.map((row) => Array.from(row));
+        try {
+          aiWorker = new Worker("./connect-four-worker.js");
+          aiWorker.onmessage = (event) => {
+            const result = event.data;
+            if (!result || result.id !== id || id !== searchId) return;
+            if (!finishSearch(id)) return;
+            if (result.error) {
+              statusEl.textContent = "AI search failed. Reset the game to try again.";
+              return;
+            }
+            let col = result.move;
+            if (!Number.isInteger(col) || dropRow(grid, col) < 0) {
+              for (let c = 0; c < COLS; c++) if (dropRow(grid, c) >= 0) { col = c; break; }
+            }
+            if (col >= 0 && !gameOver && mode !== "local" && current === player && current !== humanIs) {
+              // Keep the completed search details available for diagnostics without changing the UI.
+              console.debug("Connect Four AI search", { score: result.score, depth: result.depth, stats: result.stats });
+              playMove(col);
+            }
+          };
+          aiWorker.onerror = (event) => {
+            event.preventDefault();
+            if (!finishSearch(id)) return;
+            statusEl.textContent = "AI worker failed. Reset the game to try again.";
+          };
+          aiWorker.postMessage({ id, board, player, difficulty: diff, depth: DEPTHS[diff] });
+        } catch (error) {
+          if (finishSearch(id)) statusEl.textContent = "AI worker is unavailable. Reset the game to try again.";
+        }
       }, 150);
     }
   }
